@@ -1,0 +1,6 @@
+United States|US
+Canada|CA
+United Kingdom|UK
+Italy|IT
+Germany|GE
+Mexico|ME

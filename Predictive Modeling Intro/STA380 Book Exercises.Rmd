@@ -1,0 +1,598 @@
+---
+title: "Final_Exam"
+author: "Cory Nguyen"
+date: "8/3/2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+# PART 1: ISLR Book Problems
+
+## Chapter 2.10
+### Part a: View the data
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(MASS)
+#?Boston # This can be used to determine variable descriptions
+```
+There are 506 rows and 14 columns in this data set. The rows represent data entries (houses) and the columns represent different variables.
+
+### Part b: Pairwise plots
+```{r}
+pairs(Boston)
+```
+
+Based on these pairwise plots, there is only one variable that is binary. There are few clear instances of multicollinearity between variables,
+medv seems to be correlated with lstat and rm, while dis appears to be correlated with nox.
+
+### Part c: Associations with crim
+Based on the pairwise plots, there are no variables clearly associated with crim.
+
+### Part d: Histograms and Ranges
+```{r}
+par(mfrow=c(3,1))
+hist(Boston$crim)
+hist(Boston$tax)
+hist(Boston$ptratio)
+```
+
+Yes, there are suburbs with high crime rates and tax rates. The pupil-teacher ratio is not as right skewed as the other variables.
+
+```{r}
+range(Boston$crim)
+range(Boston$tax)
+range(Boston$ptratio)
+```
+
+The crime rate and tax rate variables have wide ranges. The pupil-teacher ratio variable does not have a wide range.
+
+### Part e: Find suburbs that close to the Charles River
+```{r}
+table(Boston$chas)
+```
+
+There are 35 suburbs bound to the Charles River.
+
+### Part f: Median ptratio
+```{r}
+median(Boston$ptratio)
+```
+
+The median pupil-teacher ratio is 19.05.
+
+### Part g: Find the min values of medv
+```{r}
+low.owner <- Boston[Boston$medv == min(Boston$medv),]
+low.owner
+```
+
+The 399th and 406th suburbs have the lowest median value of owner-occupied homes. They both have crime rates above the average and closer to the maximum. Both have tax rates that very close to the maximum for tax rates.
+
+### Part h: Analyzing 7- and 8-room houses
+```{r}
+rooms.7 <- Boston[Boston$rm >= 7,]
+rooms.8 <- Boston[Boston$rm >= 8,]
+nrow(rooms.7)
+nrow(rooms.8)
+```
+
+There are 64 suburbs that average more than 7 rooms per dwelling. There are 13 suburbs that average more than 8 rooms.
+```{r}
+rooms.8
+```
+
+Suburbs in the rooms.8 variable have about average crime rates, below average tax rates, and low pupil-teacher ratios.
+
+## Chapter 3.15
+### Part a: Fit a linear model to the crime rates in the Boston data set
+```{r}
+par(mfrow=c(3,3))
+lm.crim <- list()
+signif <- c()
+slm.crim <- c()
+for(i in 1:13){
+  lm.crim[[i]] <- lm(crim~Boston[,i+1],data=Boston)
+  plot(Boston$crim,Boston[,i+1],ylab = names(Boston[i+1]))
+  signif[i] <- summary(lm.crim[[i]])$coefficients[2,4]
+  slm.crim[i] <- summary(lm.crim[[i]])$coefficients[2,1]
+}
+```
+```{r}
+vars <- cbind(names(Boston[2:14]),signif)
+vars
+```
+
+All of the variables except for chas are significant at the 5% level when used as single predictors
+
+### Part b: Fit a multiple regression model on crim
+```{r}
+lm.crim.multi <- lm(crim~., data=Boston)
+summary(lm.crim.multi)
+```
+
+zn, dis, rad, black, and medv are the significant variables for regression of crim.
+
+### Part c: Compare the beta coefficients from the single and multiple regression models
+```{r}
+par(mfrow=c(1,1))
+plot(slm.crim,summary(lm.crim.multi)$coefficients[2:14],xlab = "Univariate Regression Coefficients",ylab = "Multiple Regression Coefficients")
+```
+
+### Part d: Fit a polynomial regression model
+```{r}
+pm.crim <- list()
+poly.pvals <- matrix(0,13,2,dimnames = list(names(Boston[2:14]),c("2 power","3 power")))
+for(i in 1:13){
+  if(i != 3){
+    pm.crim[[i]] <- lm(crim~Boston[,i+1]+I((Boston[,i+1])^2)+I((Boston[,i+1])^3),data=Boston)
+    poly.pvals[i,1] <- summary(pm.crim[[i]])$coefficients[3,4]
+    poly.pvals[i,2] <- summary(pm.crim[[i]])$coefficients[4,4]
+  }
+  else
+    pm.crim[[i]] <- lm(crim~Boston[,i+1]+I((Boston[,i+1])^2)+I((Boston[,i+1])^3),data=Boston)
+}
+poly.pvals
+```
+
+Based on the table of p-values at different powers, indus, nox, age, dis, ptratio, and medv are significant polynomial predictors at the 5% level.
+
+## Chapter 6.9
+### Part a: Split into training and testing sets
+```{r}
+library(ISLR)
+nrow(College)
+set.seed(22525)
+c.train <- sample(777,500)
+college.train <- College[c.train,]
+college.test <- College[-c.train,]
+```
+
+Training set formed using 500 entries. Remaining 277 entries used for test set.
+
+### Part b: Fit a linear model
+```{r}
+lm.college <- lm(Apps~., data = college.train)
+summary(lm.college)
+lm.preds <- predict(lm.college,college.test)
+sqrt(mean((college.test$Apps-lm.preds)^2))
+```
+
+RMSE of lm: 1073.873.
+
+### Part c: Ridge Model
+```{r}
+library(glmnet)
+grid=10^seq(10,-2,length=100)
+x.ridge = model.matrix(Apps~.,college.train)[,-1]
+y.ridge = college.train$Apps
+ridge.mod=cv.glmnet(x.ridge,y.ridge,alpha=0)
+plot(ridge.mod)
+best_lambda = ridge.mod$lambda.min
+ridge.pred <- predict(ridge.mod,s=best_lambda,newx=model.matrix(Apps~.,college.test)[,-1])
+sqrt(mean((ridge.pred-college.test$Apps)^2))
+```
+
+RMSE of ridge model: 1061.776.
+
+### Part d: Lasso Model
+```{r}
+test.matrix <- model.matrix(Apps~.,college.test)[,-1]
+cv.out=cv.glmnet(x.ridge,y.ridge,alpha=1)
+plot(cv.out)
+bestlam2=cv.out$lambda.min
+lasso.pred=predict(cv.out,s=bestlam2,newx=test.matrix)
+lasso.coef = predict(cv.out,type='coefficients',s=bestlam2)
+lasso.coef
+sqrt(mean((lasso.pred-college.test$Apps)^2)) 
+```
+
+RMSE of LASSO model: 1070.416. There are no nonzero coefficients in this lasso model.
+
+### Part e: PCR model
+```{r}
+library(pls)
+pcr.fit=pcr(Apps~., data=college.train,scale =TRUE, validation="CV")
+validationplot(pcr.fit,val.type="MSEP")
+pcr.pred=predict(pcr.fit,college.test,ncomp=16)
+sqrt(mean((pcr.pred-college.test$Apps)^2))
+```
+
+RMSE of PCR model: 1081.632.
+
+### Part f: PLS model
+```{r}
+pls.fit=plsr(Apps~., data=college.train,scale=TRUE, validation="CV")
+summary(pls.fit)
+validationplot(pls.fit,val.type="MSEP")
+pls.pred=predict(pls.fit,test.matrix,ncomp=8)
+sqrt(mean((pls.pred-college.test$Apps)^2))
+```
+
+RMSE of PLS model: 1070.544.
+
+### Part g: Summary
+The model with the lowest RMSE is the Ridge model. In general, all of these models perform the same. They can predict number of applications with an error rate of roughly 1075 applications for the entire data set.
+
+## Chapter 6.11
+### Part a: Try out models
+#### Training/Testing data sets
+```{r}
+set.seed(22525)
+b.train <- sample(1:nrow(Boston),nrow(Boston)/2)
+boston.train = Boston[b.train,]
+boston.test=Boston[-b.train,]
+x <- model.matrix(crim~zn+dis+rad+black+medv,boston.train)[,-1]
+x.test <- model.matrix(crim~zn+dis+rad+black+medv,boston.train)[,-1]
+```
+
+#### Subset selection
+```{r}
+boston.lm = lm(crim~.,data=boston.train)
+boston.step = step(boston.lm,data = boston.train,direction='forward')
+b.preds.step = predict(boston.step,boston.test)
+sqrt(mean((b.preds.step-boston.test$crim)^2))
+```
+
+RMSE of the forwards model: 7.468.
+
+#### Ridge model
+```{r}
+cv.out=cv.glmnet(x,boston.train$crim,alpha=0)
+plot(cv.out)
+bestlam=cv.out$lambda.min
+b.ridge.mod=glmnet(x,boston.train$crim,alpha=0,lambda=grid, thresh=1e-12)
+b.ridge.pred=predict(b.ridge.mod,s=bestlam,newx=x.test)
+sqrt(mean((b.ridge.pred-boston.test$crim)^2)) 
+```
+
+RMSE of the ridge model: 10.971.
+
+#### Lasso model
+```{r}
+cv.out=cv.glmnet(x,boston.train$crim,alpha=1)
+plot(cv.out)
+bestlam=cv.out$lambda.min
+lasso.mod=cv.glmnet(x,boston.train$crim,alpha=1,lambda=grid)
+lasso.pred=predict(lasso.mod,s=bestlam,newx=x.test)
+sqrt(mean((lasso.pred-boston.test$crim)^2))
+```
+
+RMSE of the lasso model: 11.109.
+
+#### PCR model
+```{r}
+pcr.fit=pcr(crim~., data=boston.train,scale=TRUE,validation="CV")
+validationplot(pcr.fit,val.type="MSEP")
+pcr.pred=predict(pcr.fit,boston.test,ncomp=3)
+sqrt(mean((pcr.pred-boston.test$crim)^2))
+```
+
+RMSE of the PCR model: 7.357.
+
+### Part b: Choose the best model
+The PCR model is the best model for this analysis because it has the lowest RMSE.
+
+### Part c: Does this model use all of the variables?
+No, the number of components that yields the best model is only 3.
+
+## Chapter 4.10
+```{r}
+weekly <- Weekly
+attach(weekly)
+summary(weekly)
+```
+
+### Part a: Graphical summaries of the Weekly data
+```{r}
+par(mfrow=c(3,3))
+hist(Lag1)
+hist(Lag2)
+hist(Lag3)
+hist(Lag4)
+hist(Lag5)
+hist(Volume)
+hist(Today)
+```
+
+### Part b: Fit a logistic regression model with all lag variables and the volume variable
+```{r}
+log.res1 <- glm(Direction~.-Year-Today, family = "binomial", data = weekly)
+summary(log.res1)
+```
+
+The only significant predictor is the Lag2 predictor.
+
+### Part c: Confusion Matrix
+```{r}
+preds.log <- predict(log.res1, weekly, type = "response")
+preds.weekly <- rep("Down",length(preds.log))
+preds.weekly[preds.log >= .5] <- "Up"
+table(preds.weekly,Direction)
+```
+
+The logistic regression model is overclassifying responses as 'Up,' resulting in hundreds of false 'Up' predictions and only a handful of false 'Down' predictions.
+
+### Part d: Training data and fitting only Lag2
+```{r}
+weekly.train <- weekly[weekly$Year <= 2008,]
+weekly.test <- weekly[weekly$Year > 2008,]
+log.res2 <- glm(Direction ~ Lag2, data = weekly.train, family = "binomial")
+preds.log2 <- predict(log.res2, weekly.test, type = "response")
+preds.weekly2 <- rep("Down",length(preds.log2))
+preds.weekly2[preds.log2 >= .5] <- "Up"
+table(preds.weekly2,weekly.test$Direction)
+```
+
+65/104 correct predictions in the test data set.
+
+### Part g: KNN model
+```{r}
+library(class)
+knn.weekly <- knn(weekly.train['Lag2'],weekly.test['Lag2'],weekly.train$Direction,1)
+table(knn.weekly,weekly.test$Direction) # Confusion matrix
+mean(knn.weekly == weekly.test$Direction)
+```
+
+52/104 correct predictions in the test data set.
+
+### Part h: Choose the better model
+Since the logistic regression model has the higher accuracy rate, it is the better model.
+
+### Part i: Try to improve the model
+```{r}
+# Test out different K values in the KNN model
+for(i in 1:10){
+  knn.model <- knn(weekly.train['Lag2'],weekly.test['Lag2'],weekly.train$Direction,i)
+  print(mean(knn.model == weekly.test$Direction))
+} # The model with the highest accuracy is when K = 4
+best.knn.model <- knn(weekly.train['Lag2'],weekly.test['Lag2'],weekly.train$Direction,4)
+mean(best.knn.model == weekly.test$Direction)
+```
+
+The accuracy of the modified KNN model is 54.81%. The logistic regression model cannot be improved by using different subsets of variables or by squaring and cubing the Lag2 variable.
+
+## Chapter 8.8
+```{r}
+library(tree)
+```
+
+### Part a: Split the data
+```{r}
+set.seed(22525)
+train <- sample(nrow(Carseats),.8*nrow(Carseats)) # 80/20 training/test split
+Carseats.train <- Carseats[train,]
+Carseats.test <- Carseats[-train,]
+```
+
+### Part b: Fit a regression tree to the training set
+```{r}
+tree.carseats <- tree(Sales~.,Carseats.train)
+par(mfrow=c(1,1))
+plot(tree.carseats)
+text(tree.carseats,pretty=0)
+preds.tree <- predict(tree.carseats,newdata=Carseats.test)
+mean((preds.tree-Carseats.test[,"Sales"])^2)
+```
+
+MSE of the regression tree: 4.485.
+
+### Part c: Use cross validation to find optimal tree complexity
+```{r}
+cv.carseats <- cv.tree(tree.carseats)
+plot(cv.carseats$size,cv.carseats$dev,type='b')
+prune.carseats <- prune.tree(tree.carseats,best=5)
+plot(prune.carseats)
+text(prune.carseats,pretty=0)
+preds.cvtree=predict(prune.carseats,newdata=Carseats.test)
+mean((preds.cvtree-Carseats.test[,"Sales"])^2)
+```
+
+MSE of the pruned tree: 4.309.
+
+### Part d: Bagging
+```{r}
+library(randomForest)
+bag.carseats<-randomForest(Sales~.,data=Carseats.train,mtry=10)
+preds.bag <- predict(bag.carseats,newdata=Carseats.test)
+mean((preds.bag-Carseats.test[,"Sales"])^2) 
+varImpPlot(bag.carseats)
+```
+
+MSE of the bagging model: 1.971. The most important variables are ShelveLoc and Price.
+
+### Part e: Random Forests
+```{r}
+for(i in 1:10){
+  rf.carseats<-randomForest(Sales~.,data=Carseats.train,mtry=i)
+  preds.rf <- predict(rf.carseats,newdata=Carseats.test)
+  print(mean((preds.rf-Carseats.test[,"Sales"])^2))
+}
+```
+
+The random forest model with the lowest MSE is the model with 5 variables with a test MSE of 1.929. As the number of variables increases, the test MSE decreases.
+
+## Chapter 8.11
+### Part a: Split Caravan into training and test data sets
+```{r}
+set.seed(22525)
+caravan <- Caravan
+caravan$purchase <- caravan$Purchase == 'Yes'
+caravan <- caravan[,-86]
+caravan.train <- caravan[1:1000,]
+caravan.test <- caravan[1001:5822,]
+```
+
+### Part b: Fit a boosting model to predict Purchases
+```{r}
+library(gbm)
+caravan.boost <- gbm(purchase~.,data=caravan.train, distribution="bernoulli",n.trees=1000, shrinkage=0.1,verbose =F)
+head(summary(caravan.boost))
+```
+
+The most important variables can be seen in the model summary above.
+
+### Part c: Predictions with the boosting model
+```{r}
+predict.caravan = predict(caravan.boost,caravan.test, n.trees = 1000, type = 'response')
+preds.caravan <- rep("No",length(predict.caravan))
+preds.caravan[predict.caravan >= .2] <- "Yes"
+cm.caravan <- table(preds.caravan,caravan.test$purchase)
+cm.caravan[2,2]/(cm.caravan[2,2]+cm.caravan[2,1])
+```
+
+Accuracy of predicted 'Yes' is 14.0%.
+
+#### How does this compare to the logistic model?
+```{r}
+caravan.logreg <- glm(purchase~.,data=caravan.train,family = 'binomial')
+predict.caravan2 = predict(caravan.logreg,caravan.test, type = 'response')
+preds.caravan2 <- rep("No",length(predict.caravan2))
+preds.caravan2[predict.caravan2 >= .5] <- "Yes"
+cm.caravan2 <- table(preds.caravan2,caravan.test$purchase)
+cm.caravan2[2,2]/(cm.caravan2[2,2]+cm.caravan2[2,1])
+```
+
+Accuracy of predicted 'Yes' is 14.7%. The boosted model performs worse than logistic regression out of sample.
+
+# PART 2: Additional Problems
+## Problem 1
+### Part a:
+```{r}
+beauty <- read.csv('https://faculty.mccombs.utexas.edu/carlos.carvalho/teaching/BeautyData.csv')
+beauty.lm <- lm(CourseEvals~.,data=beauty)
+summary(beauty.lm)
+```
+
+All variables in the data set are significant. However, the beauty score stands out with a high positive beta coefficient and a high t value. This means that it is highly unlikely that the estimated effect that BeautyScore has on evaluations is due to random chance.
+
+### Part b:
+Even though higher beauty scores result in higher course evaluations, we cannot tell which one causes the other, or if even such a causation exists. It is unknown if better looks are the result of teachers being more productive and hard working (since it takes work to stay looking fly all the time), or if students are more likely to learn from good-looking individuals. Furthermore, are students subconsiously biasing their course evaluations to favor the more attractive? There is no certain way to measure that yet.
+
+## Problem 2
+```{r}
+midcity <- read.csv('https://faculty.mccombs.utexas.edu/carlos.carvalho/teaching/MidCity.csv')
+```
+
+### Part a: Is there a premium on brick houses?
+```{r}
+brick.lm <- lm(Price~Brick,data=midcity)
+summary(brick.lm)
+```
+
+When brick is used, the price is estimated to rise by $25,811. All other things being equal, there appears to be a premium on brick houses.
+
+### Part b: Is there a premium on houses in neighborhood 3?
+```{r}
+neighbor.lm <- lm(Price~as.factor(Nbhd),data=midcity)
+summary(neighbor.lm)
+```
+
+If the house is in neighborhood 3, the price is estimated to rise by \$49,140 as opposed to the house being in neighborhood 1. When compared to neighborhood 2, the price is expected to rise by \$34,063. All other things being equal, there appears to be a premium on houses in neighborhood 3.
+
+### Part c: Is there an extra premium on brick houses in neighborhood 3?
+```{r}
+midcity.n3 <- midcity[midcity$Nbhd == 3,]
+brick.n3.lm <- lm(Price~Brick,data=midcity.n3)
+summary(brick.n3.lm)
+```
+
+For houses in neighborhood 3, if brick is used, the price is estimated to rise by a mean of $26,970. There appears to be a premium on brick houses in neighborhood 3.
+
+### Part d: Can neighborhoods 1 and 2 be combined?
+```{r}
+midcity.ncomb <- midcity
+midcity.ncomb$Nbhd <- replace(midcity.ncomb$Nbhd,which(midcity.ncomb$Nbhd == 2),1)
+neighbor.lm2 <- lm(Price~as.factor(Nbhd),data=midcity.ncomb)
+summary(neighbor.lm2)
+```
+
+The adjusted r-squared value goes from 0.558 to 0.506. The beta coefficient for N3 drops to \$45,517, but is still highly significant. Because of this, it is somewhat safe to combine neighborhoods 1 and 2 into a single factor. That said, the model is better at explaining the variance in prices when the neighborhoods are considered separately.
+
+## Problem 3
+### Part a: Why not use crime and police data from a few cities?
+Who says that you can't? If the objective is simply to understand how more cops in a city affects crime rate, then this method can serve as a barometer for determining if crime rates are even affected by police at all. However, this data is not enough to make a useful conclusion because there is no guarantee that the distributions corresponding to crime rates and the number of cops are identical in each of the sampled cities. Furthermore, each city has its own external factors that feed into crime rates. By using the above method, there is little control over these confounding variables. Finally, while the data can allow us to partially determine the effect of an increased police force on crime rates, it cannot allow us to determine what effect increasing a police force will have on crime, since the membership of a city`s police force is usually unchanging. 
+
+### Part b: Describe Table 2.
+The UPENN researchers were able to isolate the effect of increasing police forces by collecting data on a High Alert day, where police numbers are increased as an exercise and not in response to any changes in crime rate. In “Table 2”, a regression model is fit on crime rates using a High Alert dummy variable. Another regression model is fit using the High Alert dummy variable and the log of midday metro ridership. The beta coefficient for high alert is negative and significant in both models, indicating that High Alert days – which means more police on the streets – have lowered crime rates. The R-squared for both models are .14 and .17, respectively. These values show what percentage of the variance in crime rates are explained by the variables in the models.
+
+### Part c: Why control for METRO?
+By controlling for metro ridership, they are determining if the High Alert day is negatively affecting the amount of potential crime victims. This would indicate that the High Alert day results in both increased police and decreased pedestrians. Then, if crime rate were to lower on High Alert days, the researchers would be unable to tell if it lowers due to more police or fewer tourist traffic. They were trying to capture collinearity between High Alert days and pedestrian traffic.
+
+### Part d: Describe the first column of Table 4.
+This model incorporates a new dummy variable based on whether or not the crime was committed in DC District 1. Instead of simply measuring the effect of increased police on High Alert days for the entire city of DC, this model dives deeper into how the increased police affect crime rates within a specific district. Based on the model in the table, the HA-District 1 beta coefficient is significant, while the HA-other districts beta coefficients are not. This means that the increased police numbers is only significantly lowering crime rate in District 1 and not in the other districts.
+
+## Problem 4
+### Apply BART to the California Housing data
+```{r}
+cali <- read.csv('https://faculty.mccombs.utexas.edu/carlos.carvalho/teaching/CAhousing.csv')
+library(BART)
+set.seed(22525)
+train.cali <- sample(1:nrow(cali),0.8*nrow(cali))
+cali.train <- cali[train.cali,]
+cali.test <- cali[-train.cali,]
+nd = 1000 # Kept draws
+burn = 200 # number of burn in draws
+x.bart <- cali.train[,-9] # All predictors except medianHouseValue, which we will use as the response
+y.bart <- cali.train[,9] # medianHouseValue for the response
+cali.bart <- wbart(x.bart,y.bart,nskip=burn,ndpost=nd)
+preds.bart = predict(cali.bart,as.matrix(cali.test[,-9]))
+preds.bart.mean = apply(preds.bart,2,mean)
+sqrt(mean((preds.bart.mean - cali.test[,9])^2))
+```
+
+RMSE of the BART model on California Housing with all variables is 51737.81.
+
+### Compare to random forest and boosting
+#### Random Forest:
+```{r}
+#for(i in 1:9){
+#  cali.rf <- randomForest(medianHouseValue~.,data=cali.train,mtry=i)
+#  preds.cali.rf <- predict(cali.rf,newdata = cali.test)
+#  print(mean((preds.cali.rf-cali.test[,"medianHouseValue"])^2))
+#} # 5 is the best number of variables
+cali.rf <- randomForest(medianHouseValue~.,data=cali.train,mtry=5)
+preds.cali.rf <- predict(cali.rf,newdata = cali.test)
+sqrt(mean((preds.cali.rf-cali.test[,"medianHouseValue"])^2))
+```
+
+RMSE of the random forest model is 49559.54.
+
+#### Boosting:
+```{r}
+cali.boost <- gbm(medianHouseValue~.,data=cali.train,distribution= "gaussian",n.trees=1000,interaction.depth=4,shrinkage=0.1)
+summary(cali.boost)
+preds.cali.boost = predict(cali.boost,cali.test, n.trees = 1000)
+sqrt(mean((preds.cali.boost-cali.test[,"medianHouseValue"])^2))
+```
+
+RMSE of the boosting model is 49213.76.
+
+The BART model performs slightly worse than the random forest and boosting models.
+
+## Problem 5
+### Neural nets on the Boston data
+```{r}
+# Reuses boston.train and boston.test from book question 6.11
+library(nnet)
+set.seed(22525)
+boston.nn1 <- nnet(medv~.,boston.train,size=3,decay=.5,linout=T)
+boston.nn2 <- nnet(medv~.,boston.train,size=3,decay=.00001,linout=T)
+boston.nn3 <- nnet(medv~.,boston.train,size=50,decay=.5,linout=T)
+boston.nn4 <- nnet(medv~.,boston.train,size=50,decay=.00001,linout=T)
+preds.bnn1 = predict(boston.nn1,boston.test)
+preds.bnn2 = predict(boston.nn2,boston.test)
+preds.bnn3 = predict(boston.nn3,boston.test)
+preds.bnn4 = predict(boston.nn4,boston.test)
+bnn.rmse <- c(0,0,0,0)
+bnn.rmse[1] = sqrt(mean((preds.bnn1-boston.test[,"medv"])^2)) # RMSE: 4.463; this is the best model
+bnn.rmse[2] = sqrt(mean((preds.bnn2-boston.test[,"medv"])^2)) # RMSE: 8.940
+bnn.rmse[3] = sqrt(mean((preds.bnn3-boston.test[,"medv"])^2)) # RMSE: 7.122
+bnn.rmse[4] = sqrt(mean((preds.bnn4-boston.test[,"medv"])^2)) # RMSE: 6.732
+print(min(bnn.rmse))
+print(summary(boston.nn1))
+```
+
+A neural net with a low size and a low decay value is the best at predicting the 'medv' variable in the Boston data set.
+
+## Problem 6
+I was a member of Group 3 and we worked on the H1B Visa dataset. My main role on the project was to make key decisions regarding the models being used to evaluate our problem of predicting certified vs denied status. Some of these decisions include: evaluating models based on minimized false negative rate, choosing which models to use when cross-validation produced models with similar error rates, and choosing the final model in a way that balances false negative rate and total error rate (we did not want total error exceed 1% or our model would perform worse than choosing “Certified” every time). In terms of models, I worked on fitting one of our basic logistic regression models. I also compiled everyone’s code into one R file, set up every model to use the same training and testing sets, and troubleshot any coding issues the others had, providing sample code from my prior projects if needed.

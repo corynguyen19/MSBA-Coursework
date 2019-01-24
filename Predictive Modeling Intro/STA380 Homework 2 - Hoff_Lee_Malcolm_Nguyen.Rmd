@@ -1,0 +1,472 @@
+---
+title: "Pred Modeling Part 2 - Exercises 2"
+author: "Sam Malcolm"
+date: "8/17/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+### Part 1: Airlines
+
+##### Which airlines experience the longest departure delays during travel holidays?
+
+```{r}
+# For flights that are delayed, which holidays see a statistically significant increase in logDelay time?
+library(ggplot2)
+library(dplyr)
+abia <- read.csv('https://raw.githubusercontent.com/jgscott/STA380/master/data/ABIA.csv', header=TRUE)
+
+# Ignore all flights with missing departure delays or no delay
+abia <- abia[(complete.cases(abia$DepDelay)) & abia$DepDelay > 0,]
+attach(abia)
+set.seed(33)
+
+# Basic EDA
+# hist(DepDelay)
+abia$logDelay = log(DepDelay)
+# hist(abia$logDelay)
+
+# Distinguish by carrier
+# table(UniqueCarrier)
+# barplot(table(UniqueCarrier))
+
+# Christmas season: 12/22 - 12/25
+christmas.days = which(Month==12 & DayofMonth<=25 & DayofMonth>=22)
+# Memorial season: 5/23 - 5/26
+memorial.days = which(Month==5 & DayofMonth<=26 & DayofMonth>=23)
+# Labor season: 8/28 - 9/1
+labor.days = which((Month==8 & DayofMonth>=28) | (Month==9 & DayofMonth<=1))
+# Thanksgiving season: 11/24 - 11/27
+thanksgiving.days = which(Month==11 & DayofMonth<=27 & DayofMonth>=24)
+# Easter season: 3/20 - 3/23
+easter.days = which(Month==3 & DayofMonth<=23 & DayofMonth>=20)
+# July 4 season: 7/1 - 7/4
+july4.days = which((Month==7 & DayofMonth>=1) | (Month==7 & DayofMonth<=4))
+# All holidays
+holiday.days = c(christmas.days,memorial.days,labor.days,thanksgiving.days,easter.days,july4.days)
+par(mfrow = c(2,3))
+abia.christmas = abia[christmas.days,]
+# barplot(table(abia.christmas$UniqueCarrier), main = 'Christmas Season')
+abia.memorial = abia[memorial.days,]
+# barplot(table(abia.memorial$UniqueCarrier), main = 'Memorial Day Season')
+abia.labor = abia[labor.days,]
+# barplot(table(abia.labor$UniqueCarrier), main = 'Labor Day Season')
+abia.thanksgiving = abia[thanksgiving.days,]
+#barplot(table(abia.thanksgiving$UniqueCarrier), main = 'Thanksgiving Season')
+abia.easter = abia[easter.days,]
+#barplot(table(abia.easter$UniqueCarrier), main = 'Easter Season')
+abia.july4 = abia[july4.days,]
+#barplot(table(abia.july4$UniqueCarrier), main = 'July 4th Season')
+par(mfrow = c(1,1))
+abia.regular = abia[-holiday.days,]
+#barplot(table(abia.regular$UniqueCarrier), main = 'Normal Days')
+detach(abia)
+
+# mean(abia.regular$logDelay)
+abia.holidays = list(abia.christmas, abia.memorial, abia.labor, abia.easter, abia.thanksgiving, abia.july4)
+holidays = c('Christmas', 'Memorial', 'Labor', 'Easter', 'Thanksgiving', 'July 4')
+p.vals = list()
+i = 1
+for(item in abia.holidays){
+  a = t.test(abia.regular$logDelay, item$logDelay)
+  p.vals[i] = a[3]
+  i = i + 1
+}
+
+sigholidays = cbind(holidays, p.vals)
+sigholidays
+# Christmas, Labor Day, Thanksgiving (Easter (fails at .01 level))
+
+```
+
+
+
+
+```{r}
+abia <- read.csv('https://raw.githubusercontent.com/jgscott/STA380/master/data/ABIA.csv', header=TRUE)
+abia <- abia[(complete.cases(abia$DepDelay)),]
+attach(abia)
+set.seed(33)
+
+# Christmas season: 12/22 - 12/25
+christmas.days = which(Month==12 & DayofMonth<=25 & DayofMonth>=22)
+# Labor season: 8/28 - 9/1
+labor.days = which((Month==8 & DayofMonth>=28) | (Month==9 & DayofMonth<=1))
+# Thanksgiving season: 11/24 - 11/27
+thanksgiving.days = which(Month==11 & DayofMonth<=27 & DayofMonth>=24)
+
+abia.christmas = abia[christmas.days,]
+abia.labor = abia[labor.days,]
+abia.thanksgiving = abia[thanksgiving.days,]
+detach(abia)
+
+# Keep most frequent airlines ( > 5 flights for each holiday)
+sort(table(abia.christmas$UniqueCarrier) + table(abia.labor$UniqueCarrier) + table(abia.thanksgiving$UniqueCarrier))
+keep = c('WN', 'AA', 'CO', 'DL', 'B6', 'OH', 'YV', 'OO', 'F9', '9E', 'UA', 'US')
+airlines = c('Southwest', 'American', 'Continental', 'Delta', 'JetBlue', 'PSA', 'Mesa', 'Skywest', 'Frontier', 'Endeavor', 'United', 'US Airways')
+
+abia.xmas.filt = abia.christmas[abia.christmas$UniqueCarrier %in% keep,] %>% droplevels()
+abia.labor.filt = abia.labor[abia.labor$UniqueCarrier %in% keep,] %>% droplevels()
+abia.thanks.filt = abia.thanksgiving[abia.thanksgiving$UniqueCarrier %in% keep,] %>% droplevels()
+
+# Create a table with mean and sd for departure delays for each holiday
+holiday.mat = matrix(, nrow = length(keep), ncol = 7)
+
+row = 1
+for(item in keep){
+  col = 1
+  holiday.mat[row,col] = airlines[row]
+  col = 2
+  xmas.carrier = subset(abia.xmas.filt, UniqueCarrier == item)
+  thanks.carrier = subset(abia.thanks.filt, UniqueCarrier == item)
+  labor.carrier = subset(abia.labor.filt, UniqueCarrier == item)
+  holiday.mat[row, col] = mean(xmas.carrier$DepDelay)
+  col = 3
+  holiday.mat[row, col] = sd(xmas.carrier$DepDelay)
+  col = 4
+  holiday.mat[row, col] = mean(thanks.carrier$DepDelay)
+  col = 5
+  holiday.mat[row, col] = sd(thanks.carrier$DepDelay)
+  col = 6
+  holiday.mat[row, col] = mean(labor.carrier$DepDelay)
+  col = 7
+  holiday.mat[row, col] = sd(labor.carrier$DepDelay)
+  row = row + 1
+}
+
+holiday.df = as.data.frame.matrix(holiday.mat) 
+names(holiday.df) <- c("airline", "xmas_mean", "xmas_sd", "thanks_mean", "thanks_sd", "labor_mean", "labor_sd")
+
+# Plot those bad boys
+ggplot(holiday.df, aes(x = reorder(airline,as.numeric(as.character(labor_mean)),mean), y = as.numeric(as.character(labor_mean)), fill = as.numeric(as.character(labor_mean)))) +
+  geom_col(fill = c('#70DF8F', '#70DF8F', '#8C8C8C', '#8C8C8C', '#8C8C8C', '#8C8C8C', '#8C8C8C', '#8C8C8C', '#8C8C8C', '#8C8C8C', '#8C8C8C', '#FF9797')) +
+  ylim(-10, 60) +
+  labs(x = 'Airline', y = 'Average Departure Delay (mins)', title = 'Average Departure Delays - Labor Day', subtitle = 'Flights departing within 3 days prior to and including the holiday') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+ggplot(holiday.df) + 
+  aes(x = reorder(airline,as.numeric(as.character(thanks_mean)),mean), y = as.numeric(as.character(thanks_mean)), fill = as.numeric(as.character(labor_mean))) +
+  geom_col(fill = c('#70DF8F', '#70DF8F', '#70DF8F', '#70DF8F', '#8C8C8C', '#8C8C8C', '#8C8C8C', '#8C8C8C', '#8C8C8C', '#8C8C8C', '#8C8C8C', '#FF9797')) +
+  ylim(-10, 60) +
+  labs(x = 'Airline', y = 'Average Departure Delay (mins)', title = 'Average Departure Delays - Thanksgiving', subtitle = 'Flights departing within 3 days prior to and including the holiday') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+ggplot(holiday.df) + 
+  aes(x = reorder(airline,as.numeric(as.character(xmas_mean)),mean), y = as.numeric(as.character(xmas_mean)), fill = as.numeric(as.character(labor_mean))) +
+  geom_col(fill = c('#8C8C8C', '#8C8C8C', '#FF9797', '#FF9797', '#FF9797', '#FF9797', '#DF6666', '#DF6666', '#DF6666', '#DF6666', '#BF5757', '#9F4848')) +
+  ylim(-10, 60) +
+  labs(x = 'Airline', y = 'Average Departure Delay (mins)', title = 'Average Departure Delays - Christmas', subtitle = 'Flights departing within 3 days prior to and including the holiday') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+
+```
+
+### 2. - Author Attribution 
+
+##### We conducted Naive Bayes and PCR modeling. Naive Bayes was able to predict with 63.28% accuracy. PCR was able to predict with 60% accuracy.
+
+##### The Naive Bayes model was able to predict with 88% or greater accuracy for 10 authors (including 100% accuracy for 3 authors). Overall, it had a fairly spread distribution but skewed toward higher accuracy. It performed well. We can see from the histograms the difference in distribution between each model. It's interesting that - at least with these two methods - certain authors are consistent in how easy or difficult they are to predict.
+
+```{r}
+library(maptpx)
+library(wordcloud)
+library(tm)
+library(glmnet)
+set.seed(33)
+
+# Directories into single corpus
+author_dirs = Sys.glob('ReutersC50/C50train/*')
+file_list = NULL
+labels = NULL
+
+# Pull author and file names
+for(author in author_dirs) {
+  author_name = substring(author, first=29)
+  files_to_add = Sys.glob(paste0(author, '/*.txt'))
+  file_list = append(file_list, files_to_add)
+  labels = append(labels, rep(author_name, length(files_to_add)))
+}
+
+# Define function to read plaintext documents in English
+readerPlain = function(fname){
+  readPlain(elem=list(content=readLines(fname)), 
+            id=fname, language='en') }
+
+# Read in and rename docs
+all_docs = lapply(file_list, readerPlain)
+all_docsAuthor = lapply(file_list, readerPlain) 
+names(all_docs) = file_list
+names(all_docs) = sub('.txt', '', names(all_docs))
+names(all_docsAuthor) = labels
+
+# Create text mining corpus, name using author names
+docRaw = VCorpus(VectorSource(all_docs)) # Corpus function refuses to be renamed, even though it's
+# the example used in the notes and in the github examples. VCorpus or Vcorpus needed.
+# It is kept in memory and not stored in a database like SimpleCorpus. Corpus function is just SimpleCorpus.
+# Corpus automatically removes dashes, underscores, and other punctuations.
+# VCorpus does not. Not sure why it's more friendly to being renamed...?
+# https://stats.stackexchange.com/questions/164372/what-is-vectorsource-and-vcorpus-in-tm-text-mining-package-in-rus
+my_corpus = docRaw
+names(my_corpus) = labels
+
+# Preprocessing / cleaning up the phrases for search
+my_corpus = tm_map(my_corpus, content_transformer(tolower)) # make everything lowercase
+my_corpus = tm_map(my_corpus, content_transformer(removeNumbers)) # remove numbers
+my_corpus = tm_map(my_corpus, content_transformer(removePunctuation)) # remove punctuation
+my_corpus = tm_map(my_corpus, content_transformer(stripWhitespace)) # remove excess white-space
+my_corpus = tm_map(my_corpus, content_transformer(removeWords), stopwords("SMART")) # remove stopwords
+
+# Create Document Term Matrix with Tf-IDF, remove infrequent terms
+DTM = DocumentTermMatrix(my_corpus, control = list(weighting = weightTfIdf))
+DTM = removeSparseTerms(DTM, 0.99)
+DTM
+
+# Dense matrix
+X_train = as.matrix(DTM)
+
+```
+
+
+
+
+```{r}
+# Prepare test matrix
+
+author_dirs_test = Sys.glob('ReutersC50/C50test/*')
+
+file_list_test = NULL
+labels_test = NULL
+for(author_test in author_dirs_test) {
+  author_name_test = substring(author_test, first=28) # Keep at 28. Train is one letter longer than
+  # test, so we need to shorten it here. Otherwise, we get 'sman' instead of 'ssman'.
+  files_to_add_test = Sys.glob(paste0(author_test, '/*.txt'))
+  file_list_test = append(file_list_test, files_to_add_test)
+  labels_test = append(labels_test, rep(author_name_test, length(files_to_add_test)))
+}
+
+all_docs_test = lapply(file_list_test, readerPlain) 
+all_docsAuthor_test = lapply(file_list, readerPlain) 
+names(all_docs_test) = file_list_test
+names(all_docs_test) = sub('.txt', '', names(all_docs_test))
+names(all_docsAuthor_test) = labels_test
+
+docRaw_test = VCorpus(VectorSource(all_docs_test)) # Again, forced to use Vcorpus
+my_corpus_test = docRaw_test
+names(my_corpus_test) = labels_test
+
+my_corpus_test = tm_map(my_corpus_test, content_transformer(tolower)) # make everything lowercase
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removeNumbers)) # remove numbers
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removePunctuation)) # remove punctuation
+my_corpus_test = tm_map(my_corpus_test, content_transformer(stripWhitespace)) # remove excess white-space
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removeWords), stopwords("SMART")) # remove stop words
+
+DTM_test = DocumentTermMatrix(my_corpus_test, control = list(weighting = weightTfIdf))
+DTM_test = removeSparseTerms(DTM_test, 0.99)
+
+X_test = as.matrix(DTM_test)
+```
+
+
+
+
+```{r}
+
+# To account for different words existing in each set, we'll remove words that exist in the test set (but not the training set) and add words that exist in the training set but not the test set. Our training set is of a significant enough size that dropping any such words should have minimal impact. 
+
+# Lists of words from Training Set, Test Set
+train_words = colnames(X_train)
+test_words = colnames(X_test)
+
+# Create vectors to store words to add / drop
+test_add = vector(length = 0)
+test_drop = vector(length = 0)
+
+# Find test words that don't exist in training corpus, and vice versa
+for (word in test_words) {
+  if (!word %in% train_words) {
+    test_drop <- c(test_drop, word)
+  }
+}
+
+for (word in train_words) {
+  if (!word %in% test_words) {
+    test_add <- c(test_add, word)
+  }
+}
+
+# Create matrix with zero values for words to add
+zero <- matrix(0, nrow = nrow(X_train), ncol=length(test_add))
+colnames(zero) <- test_add
+
+# Append test matrix with words to add from train, drop words that don't appear in train
+X2_test = cbind(X_test, zero)
+X2_test = X2_test[,order(colnames(X2_test))]
+X2_test = X2_test[,!colnames(X2_test) %in% test_drop]
+
+```
+
+
+
+```{r}
+
+# 1. Naive Bayes 
+
+# Create multinomial probability vector with smoothing
+wc = rowsum(X_train + 1/nrow(X_train), labels)
+total_wc = rowSums(wc)
+w = wc / total_wc
+w = log(w)
+X2_train = w
+
+# Transpose training matrix, multiply to allow for author comparison, predict author
+X2_train = t(X2_train)
+log_prob = X2_test %*% X2_train
+predict = colnames(log_prob)[max.col(log_prob)]
+
+# Create matrix for comparison
+log_prob = cbind(log_prob, predict)
+bayesAcc = as.integer(rownames(log_prob) == log_prob[, ncol(log_prob)])
+result = cbind.data.frame(rownames(log_prob), predict, bayesAcc)
+
+mean(bayesAcc) # We get 63.28% accuracy 
+
+
+```
+
+
+
+
+```{r}
+
+# 2. PCR
+
+# Create train DTM, list author names
+train_DTM = X_train
+actual = rownames(X_train)
+
+# Run PC, inspect first two PCs
+pc = prcomp(train_DTM, scale=TRUE)
+plot(pc$x[,1:2], xlab="PCA 1 direction", ylab="PCA 2 direction", bty="n",
+     type='n')
+text(pc$x[,1:2], labels = 1:length(all_docs), cex=0.7)
+
+loadings = pc$rotation
+
+k = 100 # Going based off of hcluster
+multiplier = pc$rotation[, 1:k]
+scores = pc$x
+scores2 = train_DTM %*% multiplier
+
+test_X = X2_test %*% multiplier
+
+train_X = scores2
+train_y = rownames(scores)
+
+multi = glmnet(x = train_X, y = train_y, alpha = 0, family = "multinomial")
+predict = predict(multi, newx = test_X, type ="class", s=0)
+pcrAcc = as.integer(predict == rownames(X2_test))
+mean(pcrAcc) # 60% accuracy
+
+# Create matrix for comparison
+pcr_comp = cbind.data.frame(labels, predict, pcrAcc)
+
+```
+
+
+
+
+```{r}
+
+# Comparing the two models
+
+authors = unique(labels)
+n_authors = length(authors)
+
+# Naive Bayes by Author
+nb.accuracy = data.frame(matrix(ncol = 2, nrow = n_authors))
+colnames(nb.accuracy) = c('author', 'rate')
+
+for (i in 1:49){
+  author = authors[i]
+  subset = subset(result, result$`rownames(log_prob)` == authors[i])
+  nb.accuracy[i,1] = authors[i]
+  nb.accuracy[i,2] = mean(subset$bayesAcc)
+}
+
+nb.result = nb.accuracy[order(nb.accuracy$rate,decreasing = TRUE),]
+hist(nb.result$rate)
+nb.result # The model was able to predict with 88% accuracy for 10 authors (including 100% accuracy for 3 authors). Overall, it had a fairly spread distribution but skewed toward higher accuracy. It performed well. 
+
+
+# PCR by Author
+pcr.accuracy = data.frame(matrix(ncol = 2, nrow = n_authors))
+colnames(pcr.accuracy) = c('author', 'rate')
+
+for (i in 1:49){
+  author = authors[i]
+  subset = subset(pcr_comp, pcr_comp$labels == authors[i])
+  pcr.accuracy[i,1] = authors[i]
+  pcr.accuracy[i,2] = mean(subset$pcrAcc)
+}
+
+pcr.result = pcr.accuracy[order(pcr.accuracy$rate,decreasing = TRUE),]
+hist(pcr.result$rate) 
+pcr.result # We can see from the histogram the difference in distribution. It's interesting that - at least with these two methods - certain authors are consistent in how easy or difficult they are to predict.
+
+```
+
+### 3. - Association Rule Mining
+
+```{r}
+library(tidyverse)
+library(arules)  
+library(arulesViz)
+
+groceries = read.csv("https://raw.githubusercontent.com/jgscott/STA380/master/data/groceries.txt",header=F, stringsAsFactors = F)
+#groceries <- tibble::rowid_to_column(groceries, "TRANSACTION_ID")
+#groceries$TRANSACTION_ID = factor(groceries$TRANSACTION_ID)
+#Stacking groceries into an indexexed data frame similar to the example
+groceries2 = matrix(nrow=61184,ncol=2)
+i = 1
+for(row in 1:nrow(groceries)){
+  for(item in groceries[row,]){
+    groceries2[i,1] = row
+    groceries2[i,2] = item
+    i = i +1
+  }
+}
+is.na(groceries2) <- groceries2 == ''
+groceries2 = na.omit(groceries2)
+groceries2 = as.data.frame(groceries2)
+colnames(groceries2) <- c("ID", "Items")
+# Preparation for apriori
+groceries2$ID = as.factor(groceries2$ID)
+grocerylist = split(x=groceries2$Items, f=groceries2$ID)
+grocerylist = lapply(grocerylist, unique)
+
+grocerytrans = as(grocerylist, "transactions")
+summary(grocerytrans)
+#Tried support settings for apriori, until we got at least a hundred rules with 75% confidence
+groc_rules = apriori(grocerytrans, 
+                     parameter=list(support=.000125, confidence=.75, maxlen=4))
+#Grouped Matrix Plot
+plot(groc_rules, method="grouped")
+#Confidence Scatter Plot (like-Example)
+plot(groc_rules, measure = c("support", "lift"), shading = "confidence", jitter=0)
+#Plotting reveals two major outliers, reducing x and y max of the axis to better view the grouping
+plot(groc_rules, measure = c("support", "lift"), shading = "confidence",
+     main="Scatter Plot with y-lim of 200 and x-lim of 5e-04", jitter = 0,
+     xlim=c(0, 5e-04), ylim=c(0,200))
+#Bubble Map
+grocsub = subset(groc_rules, subset=confidence > 0.75 & support > 0.000125)
+summary(grocsub)
+plot(grocsub, method='graph')
+#Parallel Coordinates Plot
+plot(groc_rules, method="paracoord")
+plot(groc_rules, method="paracoord", control=list(reorder=TRUE))
+```
+
+

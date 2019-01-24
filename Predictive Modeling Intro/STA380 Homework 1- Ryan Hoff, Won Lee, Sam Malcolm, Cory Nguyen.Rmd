@@ -1,0 +1,396 @@
+---
+title: 'STA 380, Part 2: Exercises 1'
+author: "Sam Malcolm"
+date: "8/6/2018"
+output:   
+  md_document:
+    variant: markdown_github
+  keep_md: yes
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## STA 380, Part 2: Exercises 1
+```{r}
+library(ggplot2)
+set.seed(33)
+```
+
+#### Probability practice
+
+##### Part A.
+
+.71 of people who are truthful clickers answered Yes.
+
+```{r}
+p = (.65 - (.5*.3))/.7
+p
+```
+
+##### Part B.
+
+###### Suppose someone tests positive. What is the probability that they have the disease? In light of this calculation, do you envision any problems in implementing a universal testing policy for the disease?
+
+The probability that they have the disease is 19.88824%. This means that approximately 80% of the positive results will be false positives. This is not a reliable test, and those who receive false positives would have to incur unnecessary medical costs and, potentially, treatment.
+
+```{r}
+PPV = ((0.993)*(0.000025)/((0.993)*(0.000025)+(1-0.9999)*(1-0.000025))*100)
+PPV
+```
+
+
+### Part 2: Exploratory Analysis
+
+Overall, we think it’s a solid first step in an analysis. However, we question how he made certain decisions, believe he may have taken too vague of an approach, and ultimately think his conclusion is flawed.
+
+For example, he arbitrarily removes buildings with very low occupancy rates because they “might have something weird going on with them" but still chooses to evaluate his decision based on the median, effectively discounting outliers twice.
+
+He is correct that the mean and median rents of Green buildings tend to be higher than non-Green buildings overall. This appears to maintain when comparing the rents of Green buildings only to those in their cluster. However, there are still a significant number of occurrences where a Green building charges less respectively for rent. 
+
+```{r}
+green <- read.csv(file="greenbuildings.csv", header=TRUE)
+
+# Extract the buildings with green ratings + non-green ratings
+green_only= subset(green, green_rating==1)
+non_green = subset(green, green_rating==0)
+
+mean(green_only$Rent)
+mean(non_green$Rent)
+
+ggplot() + 
+  geom_histogram(data=non_green, aes(Rent, fill = I('Black'), alpha = I(.3))) +
+  geom_histogram(data=green_only, aes(Rent, fill = I('Green'), alpha = I(.5))) 
+
+```
+
+
+With this in mind, if you were to plan to build in bulk - say 100 buildings - you might have a better chance of seeing a return on investment with Green certification as rents regressed toward the mean. However, for just 1 building, we can't confidently say that you will be able to charge a premium.
+
+To show this, we can take a few different perspectives. First, we'll look at overall correlation between variables.
+
+```{r}
+
+#Correlation - 'Green' has only a .03 correlation with 'Rent'
+corr_rent = cor(green$Rent, green$green_rating)
+corr_rent
+```
+
+'Green' has only a .03 correlation with 'Rent.' Immediately we can see that this relationship might not be as straightforward as he proposed.
+
+Perhaps it would be more useful to compare the rent of a Green building with the mean rent in its cluster. 
+
+```{r}
+# How does the rent of a green building compare with those in its cluster? 
+cluster_diff = green[green$green_rating == 1,]$Rent - green[green$green_rating == 1,]$cluster_rent
+
+mean_diff = mean(cluster_diff)
+median_diff = median(cluster_diff)
+
+green_only$cluster_diff = green_only$Rent - green_only$cluster_rent
+
+ggplot() + 
+  geom_histogram(data=green_only, aes(cluster_diff, fill = I('Green'), alpha = I(.5))) + 
+  geom_vline(aes(xintercept = mean(cluster_diff) + 2*sd(cluster_diff)), colour="black") + 
+  geom_vline(aes(xintercept = mean(cluster_diff) - 2*sd(cluster_diff)), colour="black") +
+  ggtitle("Difference in Rent - Green vs Cluster mean") +
+  xlab("95% Confidence Interval represented by vertical lines") +
+  ylab("Frequency")
+
+```
+
+We observe that the mean difference between a Green building and those in its cluster is about $3.12 while the median is $2.10. In either case, it is similar to what the staffmember had found. However, we do observe a couple outliers. Even with those, the 95% confidence interval shows that there is a significant amount of Green buildings whose rent was less than the mean of its cluster.
+
+However, we have more information specific to our building. What if we drilled a little deeper and only compared the rent of Green buildings to those in its cluster in markets with similar climates to ours? Austin is relatively warm and dry, so we'll use those as a starting point.
+
+```{r}
+#Create subset of matching climates.
+warm_subset = subset(green_only, cd_total_07 > mean(green$cd_total_07)) #greater cooling days than average
+climate_subset = subset(warm_subset, Precipitation < mean(green$Precipitation)) #less precip than average
+
+climate_diff = climate_subset[climate_subset$green_rating == 1,]$Rent - climate_subset[climate_subset$green_rating == 1,]$cluster_rent
+mean_clim = mean(climate_diff)
+median_clim = median(climate_diff)
+
+climate_subset$cluster_diff = climate_subset$Rent - climate_subset$cluster_rent
+
+ggplot() + 
+  geom_histogram(data=climate_subset, aes(cluster_diff, fill = I('Green'), alpha = I(.5))) + 
+  geom_vline(aes(xintercept = mean(climate_subset$cluster_diff) + 2*sd(climate_subset$cluster_diff)), colour="black") + 
+  geom_vline(aes(xintercept = mean(climate_subset$cluster_diff) - 2*sd(climate_subset$cluster_diff)), colour="black") +
+  ggtitle("Difference in Rent - Green vs Cluster mean - Warm + Dry Climates") +
+  xlab("95% Confidence Interval represented by vertical lines") +
+  ylab("Frequency")
+
+mean(climate_subset$cluster_diff) + 2*sd(climate_subset$cluster_diff)
+```
+
+With these stipulations, we see a mean difference of just $1.67 and a median of $1.32. This likely is aided by losing the extreme outliers on the positive end from the previous metric. We also might posit that in areas with more extreme climates, people are more concerned with the climate-controlling functionality of a building rather than its green rating or features? This is supported by a correlation matrix where we can see that Electricity Costs and Total Days Heating / Cooling have the strongest relationship with Rent, but neither is particularly correlated with whether a building is or is not Green certified.
+
+There is a risk of whittling away too many observations, but we can continue to get even more specific to the features of our building. In particular, we can focus on these aspects:
+* Size - 250,000sqft
+* Stories - 15
+* Amenities - yes (mixed use)
+
+```{r}
+
+#Create subset for buildings which match ours
+size = subset(climate_subset, size > 200000 & size < 300000) #121 observations
+stories = subset(size, stories > 10 & stories < 20) #61 observations
+amenities = subset(stories, amenities == 1) #55 observations
+bldg_subset = amenities #final subset
+
+diff_bldg = bldg_subset[bldg_subset$green_rating == 1,]$Rent - bldg_subset[bldg_subset$green_rating == 1,]$cluster_rent
+mean_bldg = mean(diff_bldg)
+median_bldg = median(diff_bldg)
+
+bldg_subset$cluster_diff = bldg_subset$Rent - bldg_subset$cluster_rent
+
+ggplot() + 
+  geom_histogram(data=bldg_subset, aes(cluster_diff, fill = I('Green'), alpha = I(.5))) + 
+  geom_vline(aes(xintercept = mean(bldg_subset$cluster_diff) + 2*sd(bldg_subset$cluster_diff)), colour="black") + 
+  geom_vline(aes(xintercept = mean(bldg_subset$cluster_diff) - 2*sd(bldg_subset$cluster_diff)), colour="black") +
+  ggtitle("Difference in Rent - Green vs Cluster mean - Similar Climate + Buildings") +
+  xlab("95% Confidence Interval represented by vertical lines") +
+  ylab("Frequency")
+
+```
+
+Here we observe a mean difference within cluster of $2.12 and a median of $2.89. However, we likely do not have enough data points at this specificity.
+
+To reiterate our conclusion, we cannot confidently predict that you will be able to charge a premium in Rent if you were to invest in meeting the requirements for Green certification.
+
+
+### Part 3: Bootstrapping
+
+```{r}
+
+library(mosaic)
+library(quantmod)
+library(foreach)
+
+stocks = c('SPY', 'TLT', 'LQD', 'EEM', 'VNQ')
+prices = getSymbols(stocks)
+#SPY(15) EEM(75) VQNQ (10)
+# TLT 80, SPY 20
+
+for (ticker in stocks){
+  expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+  eval(parse(text = expr))
+}
+
+all_returns = cbind(	ClCl(SPYa),
+
+								ClCl(TLTa),
+
+								ClCl(LQDa),
+
+								ClCl(EEMa),
+
+								ClCl(VNQa))
+
+head(all_returns)
+all_returns = as.matrix(na.omit(all_returns))
+
+```
+
+In our "aggressive" portfolio, we decided to allocate 75% in emerging markets, 15% in US domestic equities, and 10% in real estate, while our "conservative" portfolio had 80% allocated in US treasury bonds and then 20% in US domestic equities.
+
+Traditionally, US treasury bonds (TTL) are the most secure with the lowest yield followed by investment-grade corporate bonds (LQD), US domestic equities (SPY), real-estate market (VNQ), and finally emerging-market equities (EEM).
+
+After evaluating each asset and portfolio, we will then state our analysis on each asset's risk/return properties based on empirical data.
+
+```{r}
+# Simulate 20 business days or four weeks with even weighting.
+set.seed(1337)
+initial_wealth = 100000
+
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+
+	total_wealth = initial_wealth
+	weights = c(0.2, 0.2, 0.2, 0.2, 0.2)
+	holdings = weights * total_wealth
+	n_days = 20
+	wealthtracker = rep(0, n_days)
+
+	for(today in 1:n_days) {
+		return.today = resample(all_returns, 1, orig.ids=FALSE)
+		holdings = holdings + holdings*return.today
+		total_wealth = sum(holdings)
+		wealthtracker[today] = total_wealth
+	}
+	wealthtracker
+}
+
+mean(sim1[,n_days])
+hist(sim1[,n_days]- initial_wealth, breaks=30)
+quantile(sim1[,n_days], 0.05) - initial_wealth
+
+```
+
+
+We simulated the even-weighted portfolio over a two-week period five thousand times to discover that the average return was approximately 966.50 USD, leaving us with 100,966.50 USD. According to the value-at-risk measure, we have a 5% probability of losing 5,906.92 USD or more in two weeks.
+
+
+```{r}
+initial_wealth = 100000
+
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+	total_wealth = initial_wealth
+	weights = c(0.15, 0, 0, 0.75, 0.1)
+	holdings = weights * total_wealth
+	n_days = 20
+
+	wealthtracker = rep(0, n_days)
+
+	for(today in 1:n_days) {
+		return.today = resample(all_returns, 1, orig.ids=FALSE)
+		holdings = holdings + holdings*return.today
+		total_wealth = sum(holdings)
+		wealthtracker[today] = total_wealth
+	}
+
+	wealthtracker
+
+}
+
+mean(sim1[,n_days])
+hist(sim1[,n_days]- initial_wealth, breaks=30)
+quantile(sim1[,n_days], 0.05) - initial_wealth
+```
+
+We then simulated our "aggressive" portfolio over a two-week period five thousand times to notice that we averaged a significantly higher return than the even-weighted portfolio, gaining 1,552.30 USD in the same span of time. The portfolio's heavy focus in emerging markets invites a far higher level of risk, since according to the value-at-risk measure, there is a 5% probability of losing 12,475.04 USD or more.
+
+
+```{r}
+initial_wealth = 100000
+
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+
+	total_wealth = initial_wealth
+	weights = c(0.2, .8, 0, 0, 0)
+	holdings = weights * total_wealth
+	n_days = 20
+	wealthtracker = rep(0, n_days)
+
+	for(today in 1:n_days) {
+		return.today = resample(all_returns, 1, orig.ids=FALSE)
+		holdings = holdings + holdings*return.today
+		total_wealth = sum(holdings)
+		wealthtracker[today] = total_wealth
+	}
+	wealthtracker
+}
+
+mean(sim1[,n_days])
+hist(sim1[,n_days]- initial_wealth, breaks=30)
+quantile(sim1[,n_days], 0.05) - initial_wealth
+
+```
+
+Finally, we simulated our more conservative portfolio that placed a heavy emphasis on US treasury bond over a two-week period, doing so five thousand times. This more secure portfolio only netted an average return of 612.00 USD, leaving us with 100,612 USD in the end. Unsurprisingly, the value-at-risk measure showed that we have a 5% probability of losing 4,166.68 USD or more, showing that it is far less risky than the two other portfolios in question.
+
+```{r}
+colMeans(all_returns) # Get the means down the columns of all_return
+
+for (i in colnames(all_returns)){
+  # This loop prints out all of the 5th quantiles for the 5 assets.
+  print (i)
+  print (quantile(all_returns[, i], .05))
+}
+
+```
+
+# Evaluation of Emerging Markets' Risk/Return Properties
+Empirically, we can see that emerging-market equities (EEM) are the most volatile and riskiest of asset classes, yet they deliver a far higher return as evidenced by our simulation with the aggressive portfolio. It averages a daily return rate of approximately .0996%, the highest of all assets, while the 5% value-at-risk measure states that we will lose -2.8% in a day or more, matching up with our traditional understanding of emerging markets.
+
+# Evaluation of Real-Estate Market's and US Domestic Equities' Risk/Return Properties
+We can see that the real-estate market (VNQ) and the US domestic equities (SPY) offers similar average daily return rates of .0412% and .0398% respectively. Both are in the middle of the pack when it comes to returns as anticipated. However, the stock market should offer higher rates of returns than real-estate markets due to being innately more volatile and therefore riskier than real estate. We have also noticed that real-estate market is slightly riskier than the stock market with potentially higher losses according to its 5% value-at-risk measure, comparable to emerging markets. It states that we have a 5% probability of losing -2.8% or more in a day. Yet, we know that the real-estate market should be less volatile or risky than the stock market due to being illiquid. Conversely, US domestic equities' 5% value-at-risk measure states that we have a 5% probability of losing 1.8% or more in a day, a potential loss rate that fits better with traditional rates. While their place in relative risk and returns compared to other markets remain true to traditional understanding, the same cannot be said when they are compared to one another. Something has caused this discrepancy to occur.
+
+# Evaluation of US Treasury Bonds' and Investment-Grade Corporate Bonds' Risk/Return Properties
+As bonds, the US treasury and investment-grade corporate bonds averages a low daily return rate at .0273% and .0208% respectively which contradicts our traditional understanding. In fact, the 5% risk-measure reflects this anomalous discrepancy by showing that investment-grade corporate bonds has a 5% probability of losing .6% or more in a day compared to the treasury bonds' 1.4% or more. They certainly fit into the traditional picture when compared to other asset classes, however, the same cannot be said when the two bonds are compared to one another. Again, something must have occurred to make the most secure bond in the world to appear more volatile and riskier than investment-grade corporate bonds.
+
+The slight deviance from traditional wisdom may be related to the housing crisis and the financial crisis that followed in 2006 and 2007 respectively.
+
+In light of this revelation, we should stress to the investor that the value-at-risk model essentially ignores the tail-end of outcomes, leading to a skewed perception about an asset's risk. Certainly, the probability of the unlikely "bad" events are low in most day-to-day situations, however, we have seen in 2008, like when the housing bubble and then financial sector collapsed, that the unlikely can become quite likely under certain economic constraints. Furthermore, we have observed that the markets are correlated with one another to the point that any negative returns in one market may lead to simultaneous negative returns in other markets, similar to what was witnessed in the Financial Crisis of 2007-2008 that followed the collapse in the housing market in 2006. While the 2007-2008 years are included in this measure of risk, value-at-risk may be ignoring the risk present due to how it completely ignores the tail-end of its outcomes. This type of risk is simply not calculated here, and the investor should be aware that they may incur significantly higher losses than anticipated when the unlikely indeed does strike. 
+
+
+### Part 4: Market Segmentation
+
+##### Method
+
+The data was pre-processed by removing all accounts that were flagged for spam or adult content. All missing values were omitted from the data. K-means clustering and principal component analysis was used on the twitter users data. K-means was performed on unscaled and scaled data and optimized for maximum score on the CH index. In both cases, the optimal number of clusters was two. When performing PCA, we found that the first component was only able to capture 12% of the variance in the data. In order to capture 80% of the variance in the data, over 20 components are required. Since there are so many components needed to describe a sufficient amount of variability in the data, only k-means clustering will be considered going forward.
+
+##### Findings
+
+When evaluating the means for each feature in the centers in K-means clustering, the two core market segments seem to be differentiable based strictly on the number of tweets in the “Food,” “Health & Nutrition,” “Cooking,” “Outdoors,” and “Personal Fitness” categories. That is to say, for all other categories, the two clusters have roughly the same number of tweets for each of the remaining categories. For the five categories previously mentioned, one cluster has exceedingly more tweets in each when compared to the other cluster. From this result, one of the major market segments for the company is an audience primarily focused on maintaining healthy diet and exercise. 
+Unsatisfied with the simplicity of this finding, the k-means algorithm was implemented repeatedly to find the next best number of clusters. In these simulations, three was found to be the next best value of k based on CH index. When using three clusters, our first finding remains intact, as one cluster center around more tweets in the “Health & Nutrition,” “Outdoors,” and “Personal Fitness” categories. However, a new market segment becomes apparent as one cluster has a noticeably high amount of average tweets in the “Chatter,” “Photo Sharing,” “Beauty,” and “Fashion” categories. We can refer to this cluster as the “Socialites.” Their Twitter behavior reflects social media savvy, personal branding, and a familiarity with Instagram aesthetic. 
+
+```{r}
+#twitter_users <- read.csv(file="social_marketing.csv", header=TRUE)
+twitter_users <- read.csv('https://raw.githubusercontent.com/jgscott/STA380/master/data/social_marketing.csv', header=TRUE)
+```
+
+```{r}
+#Clean up data
+
+#Remove frequent "adult" users (anything > 1), "spam" users (anything > 0)
+adult = twitter_users[order(-twitter_users$adult),] 
+spam = twitter_users[order(-twitter_users$spam),]
+twitter_clean = subset(twitter_users, adult < 2)
+twitter_clean = subset(twitter_clean, spam < 1)
+twitter_clean = na.omit(twitter_clean)
+twitter_clean = twitter_clean[,-1]
+twitter_clean = twitter_clean[,-35]
+twitter_clean = twitter_clean[,-35]
+twitter_clean_scaled <- scale(twitter_clean, center=TRUE, scale=TRUE) 
+```
+
+```{r}
+# Clustering and PCA
+
+set.seed(1337)
+
+# K-means before scaling
+ch.index = rep(0,37)
+for (k in 2:37){
+  train = kmeans(twitter_clean, centers = k)
+  ch.index[k] = (train$betweenss/(k-1))/(train$tot.withinss/(nrow(twitter_clean)-k))
+}
+
+plot(ch.index, type = 'l')
+max(ch.index) # 1206.84
+ch.index
+
+# K-means after scaling
+ch.index2 = rep(0,37)
+for (k in 2:37){
+  train = kmeans(twitter_clean_scaled, centers = k)
+  ch.index2[k] = (train$betweenss/(k-1))/(train$tot.withinss/(nrow(twitter_clean_scaled)-k))
+}
+
+plot(ch.index2, type = 'l')
+max(ch.index2) # 653.05
+ch.index2
+
+# PCA
+pc1 = prcomp(twitter_clean_scaled)
+
+summary(pc1)
+plot(a$importance[3,])
+```
+```{r}
+# Based on these results, we will look at the k-means algorithm on unscaled data with k = 2 to determine market segments.
+k2 = kmeans(twitter_clean, centers = 2)
+k2$size
+k2$centers
+```
+
+```{r}
+# Using two clusters isn't satisfying enough for us, so we decided to try k = 3
+k3 = kmeans(twitter_clean, centers = 3)
+k3$size
+k3$centers
+```
