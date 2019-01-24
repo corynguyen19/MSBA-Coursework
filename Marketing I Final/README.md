@@ -13,11 +13,11 @@ Time-Series plot of avocado sales by size:
 Plots of yearly average avocado price and sales volume by region:
 <br>
 <br>
-![region_plot1](/price_by_region.png)
-![region_plot2](/volume_by_region.png)
+![region_plot1](price_by_region.png)
+![region_plot2](volume_by_region.png)
 
 Lift charts for region-based and city-based targeting strategies:
 <br>
 <br>
-![lift_chart1](/lift_curve_region.png)
-![lift_chart2](/lift_curve_city.png)
+![lift_chart1](lift_curve_region.png)
+![lift_chart2](lift_curve_city.png)
