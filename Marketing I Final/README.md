@@ -8,7 +8,7 @@ In this project, we sought to determine a price point and marketing strategy wit
 This notebook generates the following visuals:
 
 Time-Series plot of avocado sales by size:
-![ts_plot1](/sales_time-series.png)
+![ts_plot1](sales_time-series.png)
 
 Plots of yearly average avocado price and sales volume by region:
 <br>
